@@ -1,17 +1,18 @@
 # PaddleOCR-MLX
 
-**PP-OCRv5 Server (best accuracy) ported to Apple's [MLX](https://github.com/ml-explore/mlx) framework for native Apple Silicon inference.**
+**PP-OCRv5 ported to Apple's [MLX](https://github.com/ml-explore/mlx) framework for native Apple Silicon inference. Supports 20+ languages.**
 
 No PyTorch. No PaddlePaddle. No ONNX. Just pure MLX — runs natively on M1/M2/M3/M4 with unified memory.
 
 ## Features
 
-- **Full PP-OCRv5 Server pipeline** — detection + recognition, the highest-accuracy variant
+- **Multi-language OCR** — server (Chinese/English), mobile (+ Japanese), Korean, Latin, Cyrillic, Arabic, and more
+- **Two model variants** — server (best accuracy) and mobile (lightweight, multilingual)
 - **Native Apple Silicon** — MLX backend, no framework translation layers
 - **Auto weight download** — fetches and converts HuggingFace weights on first run
 - **Batched recognition** — crops sorted by width and processed in batches (ported from PaddleOCR)
 - **Agent-friendly CLI** — JSON output, stdin pipes, exit codes, self-documenting `--help`
-- **~5 FPS** on Apple Silicon for 800×400 images
+- **~5 FPS** on M3 Pro for 800×400 images
 
 ## Installation
 
@@ -32,9 +33,12 @@ uv tool install .
 ```python
 from mlx_ppocr import MLXOCR
 
-ocr = MLXOCR()
-results = ocr("photo.png")
+ocr = MLXOCR()                        # server (Chinese + English)
+ocr = MLXOCR(lang="mobile")           # mobile (Chinese + English + Japanese)
+ocr = MLXOCR(lang="korean")           # Korean + English
+ocr = MLXOCR(lang="latin")            # French, Spanish, German, etc.
 
+results = ocr("photo.png")
 for box, text, confidence in results:
     print(f"{text} ({confidence:.2f})")
 ```
@@ -68,6 +72,12 @@ mlx-ocr --dry-run *.png
 
 # High-confidence results only
 mlx-ocr --json --min-confidence 0.9 document.png
+
+# Multi-language support
+mlx-ocr --lang mobile photo.png       # Chinese + English + Japanese
+mlx-ocr --lang korean receipt.png      # Korean + English
+mlx-ocr --lang latin document.png      # French, Spanish, German, etc.
+mlx-ocr --lang arabic sign.png         # Arabic, Persian, Urdu
 ```
 
 ### JSON Output Schema
@@ -111,6 +121,7 @@ detection:
   --min-confidence FLOAT Minimum OCR confidence (default: 0.0)
 
 model:
+  --lang LANG            Language/model preset (default: server)
   --det-weights PATH     Detection weights path
   --rec-weights PATH     Recognition weights path
   --vocab PATH           Vocabulary file path
@@ -132,21 +143,42 @@ other:
 | 3 | Model error (weights missing, load failure) |
 | 4 | Partial failure (some images failed in batch) |
 
+## Supported Languages
+
+| Preset | Languages | Model |
+|--------|-----------|-------|
+| `server` (default) | Chinese, English | Server (best accuracy) |
+| `mobile` | Chinese, English, Japanese | Mobile |
+| `korean` | Korean, English | Mobile |
+| `latin` | French, Spanish, German, Italian, Portuguese, 40+ more | Mobile |
+| `cyrillic` | Russian, Bulgarian, Ukrainian, 30+ more | Mobile |
+| `arabic` | Arabic, Persian, Urdu, Kurdish | Mobile |
+| `devanagari` | Hindi, Marathi, Nepali, Sanskrit | Mobile |
+| `thai` | Thai, English | Mobile |
+| `greek` | Greek, English | Mobile |
+| `tamil` | Tamil, English | Mobile |
+| `telugu` | Telugu, English | Mobile |
+
+Aliases: `japanese`→mobile, `chinese`→server, `spanish`/`french`/`german`/`italian`/`portuguese`→latin, `russian`→cyrillic, `hindi`→devanagari, `persian`→arabic
+
+The `server` and `mobile` presets use HuggingFace safetensors (zero extra dependencies). Other languages require a one-time weight conversion via `paddlepaddle`:
+
+```bash
+uv tool install mlx-ppocr[multilingual]   # includes paddlepaddle
+```
+
 ## Architecture
 
-The port faithfully reproduces the PP-OCRv5 Server architecture:
-
-**Detection:**
+**Detection** (shared across all languages):
 PPHGNetV2-L backbone → LKPAN neck → PFHeadLocal (DB) head
 
-**Recognition:**
-PPHGNetV2-L backbone → AvgPool2d → SVTR encoder (transformer) → CTC head
+**Recognition (server):**
+PPHGNetV2-L backbone → AvgPool2d → SVTR encoder → CTC head
 
-Weights are automatically downloaded from HuggingFace ([det](https://huggingface.co/PaddlePaddle/PP-OCRv5_server_det_safetensors), [rec](https://huggingface.co/PaddlePaddle/PP-OCRv5_server_rec_safetensors)) and converted to MLX format on first run. Key conversion details:
+**Recognition (mobile):**
+PP-LCNetV3 backbone → AvgPool2d → SVTR encoder → CTC head
 
-- Conv2d weights: OIHW → OHWI (MLX layout)
-- ConvTranspose2d weights: OIHW → IHWO
-- All other parameters transferred directly
+Weights are automatically downloaded from HuggingFace and converted to MLX format on first run.
 
 ## Requirements
 
