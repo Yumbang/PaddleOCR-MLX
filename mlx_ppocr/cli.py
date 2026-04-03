@@ -95,6 +95,15 @@ examples:
     det.add_argument("--min-confidence", type=float, default=0.0, help="minimum OCR confidence")
 
     mdl = parser.add_argument_group("model")
+    mdl.add_argument(
+        "--lang", default="server",
+        help="language/model preset (default: server). "
+             "Options: server, mobile, korean, latin, cyrillic, arabic, "
+             "devanagari, thai, greek, tamil, telugu, english, eslav. "
+             "Aliases: japanese→mobile, chinese→server, spanish/french/"
+             "german/italian/portuguese→latin, russian→cyrillic, "
+             "hindi→devanagari, persian→arabic",
+    )
     mdl.add_argument("--det-weights", help="detection weights path")
     mdl.add_argument("--rec-weights", help="recognition weights path")
     mdl.add_argument("--vocab", help="vocabulary file path")
@@ -258,21 +267,18 @@ def main():
         from mlx_ppocr.pipeline import MLXOCR
 
         suppress = use_json or args.quiet
+        ocr_kwargs = dict(
+            lang=args.lang,
+            det_weights=args.det_weights,
+            rec_weights=args.rec_weights,
+            vocab_path=args.vocab,
+            cache_dir=args.cache_dir,
+        )
         if suppress:
             with _suppress_stdout():
-                ocr = MLXOCR(
-                    det_weights=args.det_weights,
-                    rec_weights=args.rec_weights,
-                    vocab_path=args.vocab,
-                    cache_dir=args.cache_dir,
-                )
+                ocr = MLXOCR(**ocr_kwargs)
         else:
-            ocr = MLXOCR(
-                det_weights=args.det_weights,
-                rec_weights=args.rec_weights,
-                vocab_path=args.vocab,
-                cache_dir=args.cache_dir,
-            )
+            ocr = MLXOCR(**ocr_kwargs)
     except Exception as e:
         if use_json:
             print(_error_json(f"Model load failed: {e}", EXIT_MODEL, args))

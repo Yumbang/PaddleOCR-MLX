@@ -1,4 +1,4 @@
-"""SVTR encoder for PP-OCRv5 server recognition."""
+"""SVTR encoder for PP-OCRv5 recognition (server and mobile)."""
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -85,7 +85,8 @@ class SVTRBlock(nn.Module):
 class SVTREncoder(nn.Module):
     """SVTR encoder: conv blocks + transformer blocks for sequence modeling.
 
-    Input: feature map from backbone [B, H, W, C] where C=2048 for server model
+    Input: feature map from backbone [B, H, W, C]
+           Server: C=2048, dims=256. Mobile: C=480, dims=60.
     Output: sequence features [B, W, hidden_size] where hidden_size=120
     """
 

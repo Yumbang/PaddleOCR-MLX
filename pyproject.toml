@@ -17,6 +17,9 @@ dependencies = [
 [project.scripts]
 mlx-ocr = "mlx_ppocr.cli:main"
 
+[project.optional-dependencies]
+multilingual = ["paddlepaddle>=3.0"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

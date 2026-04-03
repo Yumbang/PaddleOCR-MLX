@@ -10,15 +10,25 @@ def load_vocab(vocab_path: str) -> list[str]:
     """Load character vocabulary from file.
 
     Supports:
-    - JSON file with 'character_list' key (HF preprocessor_config.json)
+    - HF preprocessor_config.json (key: 'character_list')
+    - PaddleOCR config.json (key: 'PostProcess.character_dict')
     - Plain text file with one character per line
     """
     path = Path(vocab_path)
     if path.suffix == ".json":
         with open(path) as f:
             data = json.load(f)
-        chars = data.get("character_list", data.get("character_dict", []))
-        return chars
+        # HF format: top-level character_list
+        if "character_list" in data:
+            return data["character_list"]
+        # HF format: top-level character_dict
+        if "character_dict" in data:
+            return data["character_dict"]
+        # PaddleOCR format: PostProcess.character_dict
+        post = data.get("PostProcess", {})
+        if "character_dict" in post:
+            return post["character_dict"]
+        raise ValueError(f"No character list found in {vocab_path}")
     else:
         with open(path, encoding="utf-8") as f:
             return [line.strip("\n") for line in f]
