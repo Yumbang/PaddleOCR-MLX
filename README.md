@@ -20,7 +20,7 @@ No PyTorch. No PaddlePaddle. No ONNX. Just pure MLX — runs natively on M1/M2/M
 uv tool install paddleocr-mlx
 
 # Or install from source
-git clone https://github.com/YOUR_USERNAME/PaddleOCR-MLX.git
+git clone https://github.com/Yumbang/PaddleOCR-MLX.git
 cd PaddleOCR-MLX
 uv tool install .
 ```
