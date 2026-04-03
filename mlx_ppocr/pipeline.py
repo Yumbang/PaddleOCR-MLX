@@ -275,15 +275,16 @@ class MLXOCR:
             print("Converting rec weights to MLX format...")
             convert_weights(sf_path, str(mlx_path), "rec")
         elif fmt == "pdiparams":
-            self._convert_pdiparams(repo, mlx_path)
+            self._convert_pdiparams(cfg, mlx_path)
         else:
             raise ValueError(f"Unknown weight format: {fmt}")
 
         return str(mlx_path)
 
-    def _convert_pdiparams(self, repo: str, mlx_path: Path):
-        """Convert PaddlePaddle .pdiparams weights to MLX .npz.
+    def _convert_pdiparams(self, cfg: dict, mlx_path: Path):
+        """Convert PaddlePaddle pretrained weights to MLX .npz.
 
+        Downloads .pdparams training weights (unfused BN) and maps keys.
         Requires paddlepaddle to be installed.
         """
         try:
@@ -299,12 +300,12 @@ class MLXOCR:
 
         from mlx_ppocr.convert import convert_paddle_weights
 
+        repo = cfg["rec_hf_repo"]
         print(f"Downloading rec model from {repo}...")
-        pdiparams_path = hf_hub_download(repo, "inference.pdiparams")
-        # Also need the model file for paddle to load parameters
-        hf_hub_download(repo, "inference.pdiparams.info")
-        print("Converting PaddlePaddle weights to MLX format...")
-        convert_paddle_weights(pdiparams_path, str(mlx_path))
+        inference_json = hf_hub_download(repo, "inference.json")
+        pdiparams = hf_hub_download(repo, "inference.pdiparams")
+        print("Converting weights to MLX format...")
+        convert_paddle_weights(inference_json, pdiparams, str(mlx_path))
 
     def _ensure_vocab(self, path: str | None) -> str:
         if path and Path(path).exists():

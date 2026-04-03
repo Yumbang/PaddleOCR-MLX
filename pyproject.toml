@@ -12,13 +12,16 @@ dependencies = [
     "shapely>=2.0.0",
     "safetensors>=0.4.0",
     "huggingface-hub>=0.20",
+    "paddleocr>=3.4.0",
 ]
 
 [project.scripts]
 mlx-ocr = "mlx_ppocr.cli:main"
 
 [project.optional-dependencies]
-multilingual = ["paddlepaddle>=3.0"]
+multilingual = [
+    "paddlepaddle>=3.0",
+]
 
 [build-system]
 requires = ["hatchling"]

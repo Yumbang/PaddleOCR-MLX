@@ -25,9 +25,10 @@ def load_vocab(vocab_path: str) -> list[str]:
         if "character_dict" in data:
             return data["character_dict"]
         # PaddleOCR format: PostProcess.character_dict
+        # Prepend blank token (index 0) since PaddleOCR dicts don't include it
         post = data.get("PostProcess", {})
         if "character_dict" in post:
-            return post["character_dict"]
+            return ["blank"] + post["character_dict"]
         raise ValueError(f"No character list found in {vocab_path}")
     else:
         with open(path, encoding="utf-8") as f:
