@@ -11,7 +11,9 @@ No PyTorch. No PaddlePaddle. No ONNX. Just pure MLX — runs natively on M1/M2/M
 - **Native Apple Silicon** — MLX backend, no framework translation layers
 - **Auto weight download** — fetches and converts HuggingFace weights on first run
 - **Batched recognition** — crops sorted by width and processed in batches (ported from PaddleOCR)
+- **Hybrid PDF OCR** — extracts embedded text where available, runs OCR only on uncovered regions
 - **Agent-friendly CLI** — JSON output, stdin pipes, exit codes, self-documenting `--help`
+- **Claude Code skill** — batch OCR skill for processing entire directories as an AI agent tool
 - **~5 FPS** on M3 Pro for 800×400 images
 
 ## Installation
@@ -80,6 +82,31 @@ mlx-ocr --lang latin document.png      # French, Spanish, German, etc.
 mlx-ocr --lang arabic sign.png         # Arabic, Persian, Urdu
 ```
 
+### PDF OCR
+
+```bash
+# Hybrid OCR (uses embedded text where available, OCR for the rest)
+mlx-ocr --json doc.pdf
+
+# Force full OCR (ignore embedded text)
+mlx-ocr --json --force-ocr doc.pdf
+
+# Select specific pages
+mlx-ocr --json --pages 1-3 doc.pdf
+
+# Custom DPI for rasterization
+mlx-ocr --json --dpi 600 doc.pdf
+
+# Korean receipt PDF
+mlx-ocr --json --pretty --lang korean receipt.pdf
+```
+
+PDF support requires PyMuPDF:
+
+```bash
+uv pip install 'mlx-ppocr[pdf]'
+```
+
 ### JSON Output Schema
 
 ```json
@@ -94,6 +121,25 @@ mlx-ocr --lang arabic sign.png         # Arabic, Persian, Urdu
       "confidence": 0.99,
       "box": [[95, 93], [430, 93], [430, 155], [95, 155]]
     }
+  ]
+}
+```
+
+For PDFs, each page is a separate JSON object with additional fields:
+
+```json
+{
+  "file": "doc.pdf",
+  "page": 1,
+  "page_count": 10,
+  "page_size": {"width": 2550, "height": 3300},
+  "processing_time_ms": 450,
+  "result_count": 15,
+  "embedded_count": 12,
+  "ocr_count": 3,
+  "results": [
+    {"text": "Invoice #12345", "confidence": 1.0, "box": [[...]], "source": "embedded"},
+    {"text": "signature",      "confidence": 0.87, "box": [[...]], "source": "ocr"}
   ]
 }
 ```
@@ -126,6 +172,11 @@ model:
   --rec-weights PATH     Recognition weights path
   --vocab PATH           Vocabulary file path
   --cache-dir DIR        Weight cache directory (default: weights)
+
+pdf:
+  --force-ocr            Force full OCR on PDF (ignore embedded text)
+  --dpi INT              PDF rasterization DPI (default: 300)
+  --pages STR            Page range: '1-5' or '1,3,7' (default: all)
 
 other:
   --visualize            Save annotated image
@@ -165,6 +216,56 @@ The `server` and `mobile` presets use HuggingFace safetensors (zero extra depend
 
 ```bash
 uv tool install mlx-ppocr[multilingual]   # includes paddlepaddle
+```
+
+## Claude Code Skill: Batch OCR
+
+This repo includes an example [Claude Code skill](https://code.claude.com/docs/en/skills) that turns `mlx-ocr` into a batch processing tool for AI agents. The skill recursively scans directories, processes all images and PDFs, and writes results to disk — keeping bulk OCR output out of the conversation context.
+
+### Why a skill instead of just calling the CLI?
+
+For a **single image or PDF**, Claude's built-in vision is better — it understands layout, can reason about content, and needs no setup. The skill is for **bulk processing**: hundreds of receipts, nested folders of scanned documents, or batch invoice extraction. It runs locally on Apple Silicon with zero API cost per file.
+
+### Install the skill
+
+```bash
+# Option 1: Use as a Claude Code plugin (recommended)
+git clone https://github.com/Yumbang/PaddleOCR-MLX.git
+claude --plugin-dir ./PaddleOCR-MLX    # test it out
+
+# Option 2: Copy into your project (project-specific, no namespace)
+cp -r PaddleOCR-MLX/skills/ocr .claude/skills/ocr
+```
+
+### Usage
+
+```
+# As a plugin (namespaced)
+/mlx-ocr:ocr ~/Documents/receipts/2026/
+
+# As a project skill (if copied to .claude/skills/)
+/ocr ~/Documents/receipts/2026/
+
+# Or just describe what you want — Claude auto-triggers on directory-level OCR
+"Extract text from all PDFs in the expenses folder"
+"OCR everything in ./scans/ and summarize what you find"
+```
+
+### What the skill does
+
+1. Recursively finds images (`.png`, `.jpg`, `.tiff`, etc.) and PDFs in the target directory
+2. Runs `mlx-ocr --json` on each file (default: `--lang korean`)
+3. Writes structured results to `ocr_results.jsonl` and plain text to `ocr_texts.txt`
+4. Returns a concise summary (file count, regions found, errors) to the conversation
+
+The skill runs in a forked subagent (`context: fork`), so the OCR output never enters your main conversation context.
+
+### Customizing
+
+The skill defaults to `--lang korean`. To change the default language for your use case, edit the `--lang` flag in `.claude/skills/ocr/scripts/batch_ocr.py`:
+
+```python
+parser.add_argument("--lang", default="korean", ...)  # change to "server", "latin", etc.
 ```
 
 ## Architecture

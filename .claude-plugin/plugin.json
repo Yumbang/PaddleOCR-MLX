@@ -1,0 +1,10 @@
+{
+  "name": "mlx-ocr",
+  "description": "Batch OCR processing on Apple Silicon using the mlx-ocr CLI",
+  "version": "0.1.0",
+  "author": {
+    "name": "Yumbang"
+  },
+  "repository": "https://github.com/Yumbang/PaddleOCR-MLX",
+  "license": "MIT"
+}
