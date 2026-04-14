@@ -22,6 +22,9 @@ mlx-ocr = "mlx_ppocr.cli:main"
 multilingual = [
     "paddlepaddle>=3.0",
 ]
+pdf = [
+    "pymupdf>=1.24.0,<2.0",
+]
 
 [build-system]
 requires = ["hatchling"]

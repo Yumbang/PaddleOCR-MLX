@@ -67,6 +67,9 @@ examples:
   cat photo.png | mlx-ocr --json --stdin-image  pipe binary image
   find . -name '*.png' | mlx-ocr --json -       pipe file paths
   mlx-ocr --dry-run *.png                       validate inputs
+  mlx-ocr --json doc.pdf                        PDF hybrid OCR
+  mlx-ocr --json --force-ocr doc.pdf            PDF full OCR
+  mlx-ocr --json --pages 1-3 doc.pdf            PDF page range
 """,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -108,6 +111,11 @@ examples:
     mdl.add_argument("--rec-weights", help="recognition weights path")
     mdl.add_argument("--vocab", help="vocabulary file path")
     mdl.add_argument("--cache-dir", default="weights", help="weight cache directory")
+
+    pdf = parser.add_argument_group("pdf")
+    pdf.add_argument("--force-ocr", action="store_true", help="force full OCR on PDF pages, ignore embedded text")
+    pdf.add_argument("--dpi", type=int, default=300, help="DPI for PDF rasterization (default: 300)")
+    pdf.add_argument("--pages", metavar="STR", help="page range: '1-5' or '1,3,7' (default: all)")
 
     parser.add_argument("--visualize", action="store_true", help="save annotated image")
     parser.add_argument("--dry-run", action="store_true", help="validate inputs without running")
@@ -203,11 +211,22 @@ def _format_text(result: dict) -> str:
     if "error" in result:
         return f"Error [{result['file']}]: {result['error']}"
     lines = [f"File: {result['file']}"]
-    sz = result["image_size"]
+    if "page" in result:
+        lines.append(f"Page: {result['page']}/{result['page_count']}")
+        sz = result["page_size"]
+    else:
+        sz = result["image_size"]
     lines.append(f"Size: {sz['width']}x{sz['height']}  Time: {result['processing_time_ms']}ms")
-    lines.append(f"Found {result['result_count']} text regions:")
+    if "embedded_count" in result:
+        lines.append(
+            f"Found {result['result_count']} text regions "
+            f"({result['embedded_count']} embedded, {result['ocr_count']} OCR):"
+        )
+    else:
+        lines.append(f"Found {result['result_count']} text regions:")
     for i, r in enumerate(result["results"]):
-        lines.append(f"  [{i + 1}] ({r['confidence']:.2f}) {r['text']}")
+        source_tag = f" [{r['source']}]" if "source" in r else ""
+        lines.append(f"  [{i + 1}] ({r['confidence']:.2f}){source_tag} {r['text']}")
     return "\n".join(lines)
 
 
@@ -290,7 +309,28 @@ def main():
     had_errors = False
     for label, source in images:
         try:
+            if isinstance(source, str) and source.lower().endswith(".pdf"):
+                from mlx_ppocr.pdf import process_pdf_hybrid
+
+                page_results = process_pdf_hybrid(
+                    ocr, source,
+                    force_ocr=args.force_ocr,
+                    dpi=args.dpi,
+                    pages=args.pages,
+                    det_thresh=args.det_thresh,
+                    box_thresh=args.box_thresh,
+                    unclip_ratio=args.unclip_ratio,
+                    min_confidence=args.min_confidence,
+                )
+                for result in page_results:
+                    if "error" in result:
+                        had_errors = True
+                    _emit(result, args)
+                continue
+
             result = _process_one(ocr, label, source, args)
+        except ImportError as e:
+            result = {"file": label, "error": str(e), "exit_code": EXIT_ERROR}
         except Exception as e:
             result = {"file": label, "error": str(e), "exit_code": EXIT_ERROR}
 
@@ -299,7 +339,9 @@ def main():
 
         _emit(result, args)
 
-        if args.visualize and "error" not in result and isinstance(source, str):
+        if (args.visualize and "error" not in result
+                and isinstance(source, str)
+                and not source.lower().endswith(".pdf")):
             _visualize(source, result)
 
     if had_errors and len(images) > 1:
